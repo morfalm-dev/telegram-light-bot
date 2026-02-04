@@ -17,7 +17,8 @@ URL = "https://www.poe.pl.ua/disconnection/power-outages/"
 SUB_LINK = "https://t.me/+35STqXwHpOVhNGNi"
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64)"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+    "Accept-Language": "uk-UA,uk;q=0.9,en;q=0.8",
 }
 
 # ================== KEYBOARD ==================
@@ -71,10 +72,17 @@ def halfhour_to_ranges(halfhours):
 
 def parse_tables():
     response = requests.get(URL, headers=HEADERS, timeout=30)
-    response.raise_for_status()
+
+    if response.status_code != 200:
+        raise RuntimeError(f"HTTP {response.status_code}")
 
     soup = BeautifulSoup(response.text, "html.parser")
-    return soup.find_all("table", class_="turnoff-scheduleui-table")
+
+    tables = soup.find_all("table", class_="turnoff-scheduleui-table")
+    if not tables:
+        raise RuntimeError("Tables not found")
+
+    return tables
 
 
 def parse_table(table):
@@ -154,15 +162,15 @@ async def main():
 
     @dp.message(Command("start"))
     async def start_cmd(message: Message):
-        await message.answer("Обери день ⬇️", reply_markup=keyboard)
+        await message.answer("Обери день для перегляду графіку ⬇️", reply_markup=keyboard)
 
     async def handle(message: Message, day: str):
         await message.answer("⏳ Отримую графік...")
 
         try:
-            tables = parse_tables()
-        except Exception:
-            await message.answer("❌ Помилка отримання даних")
+            tables = await asyncio.to_thread(parse_tables)
+        except Exception as e:
+            await message.answer(f"❌ Помилка отримання даних:\n{e}")
             return
 
         if day == "today":
@@ -190,6 +198,8 @@ async def main():
         await handle(message, "tomorrow")
 
     await dp.start_polling(bot)
+
+# ================== RUN ==================
 
 if __name__ == "__main__":
     asyncio.run(main())
